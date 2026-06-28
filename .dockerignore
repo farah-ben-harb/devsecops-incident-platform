@@ -1,0 +1,15 @@
+.git
+.gitignore
+.pytest_cache
+.mypy_cache
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+htmlcov
+reports
+runtime_validation.sqlite3
+test_incident_platform.sqlite3
+

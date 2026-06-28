@@ -71,6 +71,42 @@ The API will be available on port `8000`, and PostgreSQL will be exposed on `543
 pytest
 ```
 
+## Jenkins Pipeline v1
+
+The repository now includes a first-pass `Jenkinsfile` for the remote Ubuntu Jenkins VM.
+
+Current pipeline stages:
+
+- `Checkout`
+- `Verify Toolchain`
+- `Install Dependencies`
+- `Run Tests`
+- `Build Docker Image`
+
+The v1 pipeline intentionally stops after the Docker build. Later phases will add:
+
+- Gitleaks
+- dependency vulnerability scanning
+- Trivy image scanning
+- GHCR push
+- GitOps repository update
+
+## Jenkins VM Prerequisites
+
+Before running the pipeline on the Ubuntu VM, make sure these are installed in addition to Jenkins and Docker:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv python3-pip
+```
+
+The Jenkins service user must also be able to access Docker:
+
+```bash
+sudo usermod -aG docker jenkins
+sudo systemctl restart jenkins
+```
+
 ## Repository Structure
 
 ```text
@@ -96,4 +132,3 @@ requirements.txt
 - GitOps manifest updates in a separate repo
 - Argo CD deployment to `kind`
 - Prometheus and Grafana dashboards
-

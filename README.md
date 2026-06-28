@@ -1,0 +1,99 @@
+# DevSecOps Incident Platform
+
+`DevSecOps Incident Platform` is a production-style FastAPI service for managing operational incidents. It is the application repository in a larger portfolio project that will later add Jenkins CI, security scanning, GHCR publishing, Kubernetes manifests, Argo CD GitOps delivery, and Prometheus/Grafana monitoring.
+
+## Phase 1 Scope
+
+- FastAPI REST API with OpenAPI docs
+- PostgreSQL-backed incident CRUD
+- `/health`, `/ready`, and `/metrics`
+- Request validation with Pydantic
+- Unit tests with `pytest`
+- Dockerfile and local `docker-compose` workflow
+
+## API Overview
+
+Base URL: `http://localhost:8000`
+
+- `GET /health`
+- `GET /ready`
+- `GET /metrics`
+- `GET /api/incidents`
+- `POST /api/incidents`
+- `GET /api/incidents/{incident_id}`
+- `PUT /api/incidents/{incident_id}`
+- `DELETE /api/incidents/{incident_id}`
+
+Swagger UI is available at `http://localhost:8000/docs`.
+
+## Incident Model
+
+Each incident includes:
+
+- `title`
+- `description`
+- `severity`
+- `status`
+- `service_name`
+- `created_at`
+- `updated_at`
+
+## Local Development
+
+1. Copy `.env.example` to `.env`.
+2. Update the PostgreSQL password if needed.
+3. Create a virtual environment and install dependencies:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+4. Run the API:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+## Local Docker Workflow
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+The API will be available on port `8000`, and PostgreSQL will be exposed on `5432`.
+
+## Running Tests
+
+```bash
+pytest
+```
+
+## Repository Structure
+
+```text
+app/
+  api/
+  core/
+  db/
+  models/
+  schemas/
+  services/
+  telemetry/
+tests/
+Dockerfile
+docker-compose.yml
+requirements.txt
+```
+
+## Upcoming Phases
+
+- Jenkins pipeline with tests and Docker build
+- Gitleaks, dependency, and Trivy scans
+- GHCR image publishing
+- GitOps manifest updates in a separate repo
+- Argo CD deployment to `kind`
+- Prometheus and Grafana dashboards
+

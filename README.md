@@ -111,9 +111,17 @@ Each successful pipeline run publishes:
 
 Example:
 
-- `ghcr.io/farah-ben-harb/devsecops-incident-platform:build-12`
-- `ghcr.io/farah-ben-harb/devsecops-incident-platform:sha-a1b2c3d`
-- `ghcr.io/farah-ben-harb/devsecops-incident-platform:latest`
+- `ghcr.io/farah-ben-harb/devsecops-incident-platform-api:build-12`
+- `ghcr.io/farah-ben-harb/devsecops-incident-platform-api:sha-a1b2c3d`
+- `ghcr.io/farah-ben-harb/devsecops-incident-platform-api:latest`
+
+## GHCR Package Note
+
+The image is intentionally published under a dedicated package namespace:
+
+- `ghcr.io/farah-ben-harb/devsecops-incident-platform-api`
+
+This avoids issues with older private package state from early test pushes and ensures the package is created with repository metadata labels from the beginning.
 
 ## Jenkins Credential For GHCR
 

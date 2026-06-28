@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        APP_IMAGE = "ghcr.io/farah-ben-harb/devsecops-incident-platform"
+        APP_IMAGE = "ghcr.io/farah-ben-harb/devsecops-incident-platform-api"
         BUILD_IMAGE_TAG = "build-${BUILD_NUMBER}"
         VENV_DIR = ".venv"
         REPORTS_DIR = "reports"
@@ -144,6 +144,16 @@ pipeline {
                         docker logout ghcr.io
                     '''
                 }
+            }
+        }
+
+        stage('Verify Public Registry Access') {
+            steps {
+                sh '''
+                    set -eu
+                    docker logout ghcr.io || true
+                    docker manifest inspect "${APP_IMAGE}:${BUILD_IMAGE_TAG}" > /dev/null
+                '''
             }
         }
     }

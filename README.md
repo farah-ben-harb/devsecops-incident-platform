@@ -71,9 +71,9 @@ The API will be available on port `8000`, and PostgreSQL will be exposed on `543
 pytest
 ```
 
-## Jenkins Pipeline v1
+## Jenkins Pipeline v2
 
-The repository now includes a first-pass `Jenkinsfile` for the remote Ubuntu Jenkins VM.
+The repository now includes a Jenkins pipeline for the remote Ubuntu Jenkins VM with both CI and initial DevSecOps security gates.
 
 Current pipeline stages:
 
@@ -81,15 +81,23 @@ Current pipeline stages:
 - `Verify Toolchain`
 - `Install Dependencies`
 - `Run Tests`
+- `Gitleaks Scan`
+- `Dependency Vulnerability Scan`
 - `Build Docker Image`
+- `Trivy Image Scan`
 
-The v1 pipeline intentionally stops after the Docker build. Later phases will add:
+The current pipeline stops after the local image build and image scan. Later phases will add:
 
-- Gitleaks
-- dependency vulnerability scanning
-- Trivy image scanning
 - GHCR push
 - GitOps repository update
+
+### Scan Tools Used
+
+- `Gitleaks` scans the repository for hardcoded secrets.
+- `pip-audit` scans Python dependencies for known vulnerabilities.
+- `Trivy` scans the built container image for high and critical vulnerabilities.
+
+The pipeline archives the generated reports in the Jenkins build artifacts under `reports/`.
 
 ## Jenkins VM Prerequisites
 

@@ -71,9 +71,9 @@ The API will be available on port `8000`, and PostgreSQL will be exposed on `543
 pytest
 ```
 
-## Jenkins Pipeline v2
+## Jenkins Pipeline v3
 
-The repository now includes a Jenkins pipeline for the remote Ubuntu Jenkins VM with both CI and initial DevSecOps security gates.
+The repository now includes a Jenkins pipeline for the remote Ubuntu Jenkins VM with CI, DevSecOps security gates, and GHCR publishing.
 
 Current pipeline stages:
 
@@ -83,12 +83,13 @@ Current pipeline stages:
 - `Run Tests`
 - `Gitleaks Scan`
 - `Dependency Vulnerability Scan`
+- `Prepare Image Tags`
 - `Build Docker Image`
 - `Trivy Image Scan`
+- `Push Image To GHCR`
 
-The current pipeline stops after the local image build and image scan. Later phases will add:
+The current pipeline now publishes container images after all quality and security checks pass. Later phases will add:
 
-- GHCR push
 - GitOps repository update
 
 ### Scan Tools Used
@@ -96,8 +97,34 @@ The current pipeline stops after the local image build and image scan. Later pha
 - `Gitleaks` scans the repository for hardcoded secrets.
 - `pip-audit` scans Python dependencies for known vulnerabilities.
 - `Trivy` scans the built container image for high and critical vulnerabilities.
+- Docker pushes the image to `ghcr.io` using Jenkins-managed credentials.
 
 The pipeline archives the generated reports in the Jenkins build artifacts under `reports/`.
+
+### Image Tags Produced
+
+Each successful pipeline run publishes:
+
+- `build-<jenkins-build-number>`
+- `sha-<short-git-sha>`
+- `latest`
+
+Example:
+
+- `ghcr.io/farah-ben-harb/devsecops-incident-platform:build-12`
+- `ghcr.io/farah-ben-harb/devsecops-incident-platform:sha-a1b2c3d`
+- `ghcr.io/farah-ben-harb/devsecops-incident-platform:latest`
+
+## Jenkins Credential For GHCR
+
+Create a Jenkins credential with:
+
+- Kind: `Username with password`
+- ID: `ghcr-creds`
+- Username: your GitHub username, `farah-ben-harb`
+- Password: a GitHub Personal Access Token with package write access
+
+The pipeline uses that credential to run `docker login ghcr.io` and push the image tags.
 
 ## Jenkins VM Prerequisites
 

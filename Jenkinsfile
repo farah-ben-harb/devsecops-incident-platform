@@ -87,12 +87,25 @@ pipeline {
             }
         }
 
+        stage('Prepare Image Tags') {
+            steps {
+                script {
+                    env.GIT_SHA_SHORT = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
+                    env.SHA_IMAGE_TAG = "sha-${env.GIT_SHA_SHORT}"
+                    env.LATEST_IMAGE_TAG = "latest"
+                }
+                echo "Image tags prepared: ${BUILD_IMAGE_TAG}, ${SHA_IMAGE_TAG}, ${LATEST_IMAGE_TAG}"
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 sh '''
                     set -eu
                     docker build \
                       -t "${APP_IMAGE}:${BUILD_IMAGE_TAG}" \
+                      -t "${APP_IMAGE}:${SHA_IMAGE_TAG}" \
+                      -t "${APP_IMAGE}:${LATEST_IMAGE_TAG}" \
                       .
                 '''
             }
@@ -112,6 +125,27 @@ pipeline {
                 '''
             }
         }
+
+        stage('Push Image To GHCR') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'ghcr-creds',
+                        usernameVariable: 'GHCR_USERNAME',
+                        passwordVariable: 'GHCR_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+                        printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+                        docker push "${APP_IMAGE}:${BUILD_IMAGE_TAG}"
+                        docker push "${APP_IMAGE}:${SHA_IMAGE_TAG}"
+                        docker push "${APP_IMAGE}:${LATEST_IMAGE_TAG}"
+                        docker logout ghcr.io
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -120,7 +154,8 @@ pipeline {
             archiveArtifacts allowEmptyArchive: true, artifacts: 'reports/*'
         }
         success {
-            echo "Build completed with CI and security scans. Docker image available as ${APP_IMAGE}:${BUILD_IMAGE_TAG}"
+            echo "Build completed with CI, security scans, and GHCR push."
+            echo "Published tags: ${APP_IMAGE}:${BUILD_IMAGE_TAG}, ${APP_IMAGE}:${SHA_IMAGE_TAG}, ${APP_IMAGE}:${LATEST_IMAGE_TAG}"
         }
     }
 }

@@ -8,6 +8,9 @@ pipeline {
     environment {
         APP_IMAGE = "ghcr.io/farah-ben-harb/devsecops-incident-platform-api"
         BUILD_IMAGE_TAG = "build-${BUILD_NUMBER}"
+        GITOPS_REPO_URL = "https://github.com/farah-ben-harb/gitops-delivery-platform.git"
+        GITOPS_REPO_BRANCH = "main"
+        GITOPS_REPO_DIR = "gitops-repo"
         VENV_DIR = ".venv"
         REPORTS_DIR = "reports"
     }
@@ -149,6 +152,54 @@ pipeline {
                 }
             }
         }
+
+        stage('Update GitOps Repo') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'gitops-repo-creds',
+                        usernameVariable: 'GITOPS_USERNAME',
+                        passwordVariable: 'GITOPS_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+                        rm -rf "${GITOPS_REPO_DIR}"
+                        git clone --branch "${GITOPS_REPO_BRANCH}" "${GITOPS_REPO_URL}" "${GITOPS_REPO_DIR}"
+                        cd "${GITOPS_REPO_DIR}"
+                        export TARGET_TAG="${SHA_IMAGE_TAG}"
+                        python3 - <<'PY'
+from pathlib import Path
+import os
+
+path = Path("overlays/local-kind/kustomization.yaml")
+lines = path.read_text(encoding="utf-8").splitlines()
+target_tag = os.environ["TARGET_TAG"]
+
+for index, line in enumerate(lines):
+    if line.strip().startswith("newTag:"):
+        previous = line.split(":", 1)[1].strip()
+        lines[index] = f"    newTag: {target_tag}"
+        path.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
+        print(f"Updated GitOps image tag from {previous} to {target_tag}")
+        break
+else:
+    raise SystemExit("newTag field not found in overlays/local-kind/kustomization.yaml")
+PY
+                        git config user.name "Jenkins"
+                        git config user.email "jenkins@local"
+                        git add overlays/local-kind/kustomization.yaml
+                        if git diff --cached --quiet; then
+                          echo "No GitOps changes detected."
+                          exit 0
+                        fi
+                        git commit -m "chore: deploy ${SHA_IMAGE_TAG}"
+                        git remote set-url origin "https://${GITOPS_USERNAME}:${GITOPS_TOKEN}@github.com/farah-ben-harb/gitops-delivery-platform.git"
+                        git push origin "${GITOPS_REPO_BRANCH}"
+                    '''
+                }
+            }
+        }
     }
 
     post {
@@ -157,7 +208,7 @@ pipeline {
             archiveArtifacts allowEmptyArchive: true, artifacts: 'reports/*'
         }
         success {
-            echo "Build completed with CI, security scans, and GHCR push."
+            echo "Build completed with CI, security scans, GHCR push, and GitOps repo update."
             echo "Published tags: ${APP_IMAGE}:${BUILD_IMAGE_TAG}, ${APP_IMAGE}:${SHA_IMAGE_TAG}, ${APP_IMAGE}:${LATEST_IMAGE_TAG}"
         }
     }

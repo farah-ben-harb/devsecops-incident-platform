@@ -71,9 +71,9 @@ The API will be available on port `8000`, and PostgreSQL will be exposed on `543
 pytest
 ```
 
-## Jenkins Pipeline v3
+## Jenkins Pipeline v4
 
-The repository now includes a Jenkins pipeline for the remote Ubuntu Jenkins VM with CI, DevSecOps security gates, and GHCR publishing.
+The repository now includes a Jenkins pipeline for the remote Ubuntu Jenkins VM with CI, DevSecOps security gates, GHCR publishing, and GitOps repository update automation.
 
 Current pipeline stages:
 
@@ -87,10 +87,11 @@ Current pipeline stages:
 - `Build Docker Image`
 - `Trivy Image Scan`
 - `Push Image To GHCR`
+- `Update GitOps Repo`
 
-The current pipeline now publishes container images after all quality and security checks pass. Later phases will add:
+The current pipeline now publishes container images after all quality and security checks pass, then updates the GitOps repository with the immutable image tag. Later phases will add:
 
-- GitOps repository update
+- Argo CD synchronization
 
 ### Scan Tools Used
 
@@ -102,6 +103,16 @@ The current pipeline now publishes container images after all quality and securi
 The pipeline archives the generated reports in the Jenkins build artifacts under `reports/`.
 
 The GHCR package is treated as a private package by default. Jenkins verifies the pushed tags while still authenticated. In the Kubernetes phase, we will use an `imagePullSecret` so the cluster can pull the private image safely.
+
+### Why Jenkins Uses The SHA Tag In GitOps
+
+Jenkins updates the GitOps repo with the `sha-<short-git-sha>` image tag rather than `latest`.
+
+That gives us:
+
+- immutable deployments
+- traceability from running pod back to source commit
+- cleaner rollback behavior
 
 ### Image Tags Produced
 
@@ -135,6 +146,23 @@ Create a Jenkins credential with:
 - Password: a GitHub Personal Access Token with package write access
 
 The pipeline uses that credential to run `docker login ghcr.io` and push the image tags.
+
+## Jenkins Credential For GitOps Repo Push
+
+Create a second Jenkins credential with:
+
+- Kind: `Username with password`
+- ID: `gitops-repo-creds`
+- Username: your GitHub username, `farah-ben-harb`
+- Password: a GitHub Personal Access Token with repository write access
+
+The simplest safe option is a token with:
+
+- `repo`
+
+Jenkins uses that credential only to commit and push the image tag change into:
+
+- `gitops-delivery-platform`
 
 ## Jenkins VM Prerequisites
 

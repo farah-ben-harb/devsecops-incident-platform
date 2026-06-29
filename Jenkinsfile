@@ -7,7 +7,6 @@ pipeline {
 
     environment {
         APP_IMAGE = "ghcr.io/farah-ben-harb/devsecops-incident-platform-api"
-        PACKAGE_NAME = "devsecops-incident-platform-api"
         BUILD_IMAGE_TAG = "build-${BUILD_NUMBER}"
         VENV_DIR = ".venv"
         REPORTS_DIR = "reports"
@@ -142,42 +141,12 @@ pipeline {
                         docker push "${APP_IMAGE}:${BUILD_IMAGE_TAG}"
                         docker push "${APP_IMAGE}:${SHA_IMAGE_TAG}"
                         docker push "${APP_IMAGE}:${LATEST_IMAGE_TAG}"
+                        docker manifest inspect "${APP_IMAGE}:${BUILD_IMAGE_TAG}" > /dev/null
+                        docker manifest inspect "${APP_IMAGE}:${SHA_IMAGE_TAG}" > /dev/null
+                        docker manifest inspect "${APP_IMAGE}:${LATEST_IMAGE_TAG}" > /dev/null
                         docker logout ghcr.io
                     '''
                 }
-            }
-        }
-
-        stage('Set GHCR Package Public') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'ghcr-creds',
-                        usernameVariable: 'GHCR_USERNAME',
-                        passwordVariable: 'GHCR_TOKEN'
-                    )
-                ]) {
-                    sh '''
-                        set -eu
-                        curl --fail --silent --show-error \
-                          -X PATCH \
-                          -H "Accept: application/vnd.github+json" \
-                          -H "Authorization: Bearer ${GHCR_TOKEN}" \
-                          -H "X-GitHub-Api-Version: 2022-11-28" \
-                          https://api.github.com/user/packages/container/${PACKAGE_NAME}/visibility \
-                          -d '{"visibility":"public"}'
-                    '''
-                }
-            }
-        }
-
-        stage('Verify Public Registry Access') {
-            steps {
-                sh '''
-                    set -eu
-                    docker logout ghcr.io || true
-                    docker manifest inspect "${APP_IMAGE}:${BUILD_IMAGE_TAG}" > /dev/null
-                '''
             }
         }
     }

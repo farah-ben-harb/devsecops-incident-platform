@@ -87,7 +87,6 @@ Current pipeline stages:
 - `Build Docker Image`
 - `Trivy Image Scan`
 - `Push Image To GHCR`
-- `Set GHCR Package Public`
 
 The current pipeline now publishes container images after all quality and security checks pass. Later phases will add:
 
@@ -102,7 +101,7 @@ The current pipeline now publishes container images after all quality and securi
 
 The pipeline archives the generated reports in the Jenkins build artifacts under `reports/`.
 
-After the push, Jenkins also calls the GitHub Packages API to set the newly published container package visibility to `public`, so anonymous pulls from `ghcr.io` work without needing a login.
+The GHCR package is treated as a private package by default. Jenkins verifies the pushed tags while still authenticated. In the Kubernetes phase, we will use an `imagePullSecret` so the cluster can pull the private image safely.
 
 ### Image Tags Produced
 

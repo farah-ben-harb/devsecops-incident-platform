@@ -1,19 +1,66 @@
 # DevSecOps Incident Platform
 
-`DevSecOps Incident Platform` is a production-style FastAPI service for managing operational incidents. It is the application repository in a larger portfolio project that will later add Jenkins CI, security scanning, GHCR publishing, Kubernetes manifests, Argo CD GitOps delivery, and Prometheus/Grafana monitoring.
+Production-style incident tracking API built with `FastAPI` and `PostgreSQL`, designed as the application repository of a broader DevSecOps and GitOps portfolio platform.
 
-## Phase 1 Scope
+This repository focuses on the application layer:
 
-- FastAPI REST API with OpenAPI docs
-- PostgreSQL-backed incident CRUD
-- `/health`, `/ready`, and `/metrics`
-- Request validation with Pydantic
-- Unit tests with `pytest`
-- Dockerfile and local `docker-compose` workflow
+- REST API for incident management
+- PostgreSQL-backed persistence
+- health, readiness, and Prometheus metrics endpoints
+- automated tests
+- container packaging
+- Jenkins-driven CI and image publishing
 
-## API Overview
+The deployment layer lives in the companion repository:
 
-Base URL: `http://localhost:8000`
+- `gitops-delivery-platform`
+
+## Architecture Summary
+
+The end-to-end workflow for the full platform is:
+
+1. Developers push changes to this repository
+2. Jenkins runs tests and security scans
+3. Jenkins builds the Docker image
+4. Jenkins pushes the image to GitHub Container Registry
+5. Jenkins updates the GitOps repository with the immutable image tag
+6. Argo CD detects the GitOps change and deploys to Kubernetes
+7. Prometheus scrapes application metrics and Grafana visualizes them
+
+## Core Capabilities
+
+- FastAPI REST API with OpenAPI documentation
+- CRUD operations for incidents
+- PostgreSQL integration using SQLAlchemy
+- `/health` endpoint for liveness checks
+- `/ready` endpoint for readiness and database reachability checks
+- `/metrics` endpoint for Prometheus scraping
+- request validation with Pydantic
+- unit tests with `pytest`
+- containerized local workflow with Docker Compose
+- Jenkins pipeline with CI, security scanning, GHCR publishing, and GitOps update automation
+
+## Technology Stack
+
+- `FastAPI`
+- `PostgreSQL`
+- `SQLAlchemy`
+- `Pydantic`
+- `pytest`
+- `Docker`
+- `Jenkins`
+- `Gitleaks`
+- `pip-audit`
+- `Trivy`
+- `GitHub Container Registry (GHCR)`
+
+## API Endpoints
+
+Base URL:
+
+- `http://localhost:8000`
+
+Available endpoints:
 
 - `GET /health`
 - `GET /ready`
@@ -24,9 +71,11 @@ Base URL: `http://localhost:8000`
 - `PUT /api/incidents/{incident_id}`
 - `DELETE /api/incidents/{incident_id}`
 
-Swagger UI is available at `http://localhost:8000/docs`.
+Swagger UI:
 
-## Incident Model
+- `http://localhost:8000/docs`
+
+## Incident Data Model
 
 Each incident includes:
 
@@ -38,19 +87,63 @@ Each incident includes:
 - `created_at`
 - `updated_at`
 
+## Repository Structure
+
+```text
+app/
+  api/
+    routes/
+  core/
+  db/
+  models/
+  schemas/
+  services/
+  telemetry/
+tests/
+  unit/
+Dockerfile
+docker-compose.yml
+Jenkinsfile
+requirements.txt
+```
+
 ## Local Development
 
-1. Copy `.env.example` to `.env`.
-2. Update the PostgreSQL password if needed.
-3. Create a virtual environment and install dependencies:
+### 1. Configure environment variables
+
+Copy the example file and adjust values if needed:
+
+```bash
+cp .env.example .env
+```
+
+Key variables:
+
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_HOST`
+- `POSTGRES_PORT`
+- `DATABASE_URL`
+
+### 2. Create a virtual environment
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-4. Run the API:
+### 3. Run PostgreSQL locally
+
+You can either use your own PostgreSQL instance or start the local container stack:
+
+```bash
+docker compose up -d postgres
+```
+
+### 4. Start the API
 
 ```bash
 uvicorn app.main:app --reload
@@ -58,24 +151,63 @@ uvicorn app.main:app --reload
 
 ## Local Docker Workflow
 
+Run the full application stack with Docker Compose:
+
 ```bash
 cp .env.example .env
 docker compose up --build
 ```
 
-The API will be available on port `8000`, and PostgreSQL will be exposed on `5432`.
+Services:
 
-## Running Tests
+- API on `8000`
+- PostgreSQL on `5432`
+
+## Validation Commands
+
+Once the app is running:
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/ready
+curl http://localhost:8000/metrics
+```
+
+Example incident creation:
+
+```bash
+curl -X POST http://localhost:8000/api/incidents \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Database latency spike","description":"PostgreSQL response time increased","severity":"high","status":"open","service_name":"postgresql"}'
+```
+
+## Test Suite
+
+Run unit tests:
 
 ```bash
 pytest
 ```
 
-## Jenkins Pipeline v4
+## Observability
 
-The repository now includes a Jenkins pipeline for the remote Ubuntu Jenkins VM with CI, DevSecOps security gates, GHCR publishing, and GitOps repository update automation.
+The application exposes Prometheus metrics at:
 
-Current pipeline stages:
+- `GET /metrics`
+
+Key metrics include:
+
+- `http_requests_total`
+- `http_request_duration_seconds`
+- `api_error_total`
+- `incident_created_total`
+- `app_uptime_seconds`
+
+## Jenkins Pipeline
+
+This repository includes a Jenkins pipeline intended for a remote Ubuntu Jenkins VM.
+
+Pipeline stages:
 
 - `Checkout`
 - `Verify Toolchain`
@@ -89,34 +221,26 @@ Current pipeline stages:
 - `Push Image To GHCR`
 - `Update GitOps Repo`
 
-The current pipeline now publishes container images after all quality and security checks pass, then updates the GitOps repository with the immutable image tag. Later phases will add:
+## Security Gates
 
-- Argo CD synchronization
+The CI pipeline includes:
 
-### Scan Tools Used
+- `Gitleaks` for secret scanning
+- `pip-audit` for Python dependency vulnerability scanning
+- `Trivy` for container image vulnerability scanning
+- immutable image tagging for traceability and rollback safety
 
-- `Gitleaks` scans the repository for hardcoded secrets.
-- `pip-audit` scans Python dependencies for known vulnerabilities.
-- `Trivy` scans the built container image for high and critical vulnerabilities.
-- Docker pushes the image to `ghcr.io` using Jenkins-managed credentials.
+Reports are archived by Jenkins under:
 
-The pipeline archives the generated reports in the Jenkins build artifacts under `reports/`.
+- `reports/`
 
-The GHCR package is treated as a private package by default. Jenkins verifies the pushed tags while still authenticated. In the Kubernetes phase, we will use an `imagePullSecret` so the cluster can pull the private image safely.
+## Container Image Publishing
 
-### Why Jenkins Uses The SHA Tag In GitOps
+The application image is published to:
 
-Jenkins updates the GitOps repo with the `sha-<short-git-sha>` image tag rather than `latest`.
+- `ghcr.io/farah-ben-harb/devsecops-incident-platform-api`
 
-That gives us:
-
-- immutable deployments
-- traceability from running pod back to source commit
-- cleaner rollback behavior
-
-### Image Tags Produced
-
-Each successful pipeline run publishes:
+Each successful pipeline publishes:
 
 - `build-<jenkins-build-number>`
 - `sha-<short-git-sha>`
@@ -128,80 +252,73 @@ Example:
 - `ghcr.io/farah-ben-harb/devsecops-incident-platform-api:sha-a1b2c3d`
 - `ghcr.io/farah-ben-harb/devsecops-incident-platform-api:latest`
 
-## GHCR Package Note
+The GitOps workflow uses the immutable `sha-<short-git-sha>` tag.
 
-The image is intentionally published under a dedicated package namespace:
+## Jenkins Credentials
 
-- `ghcr.io/farah-ben-harb/devsecops-incident-platform-api`
+### GHCR push credential
 
-This avoids issues with older private package state from early test pushes and ensures the package is created with repository metadata labels from the beginning.
-
-## Jenkins Credential For GHCR
-
-Create a Jenkins credential with:
+Create a Jenkins credential:
 
 - Kind: `Username with password`
 - ID: `ghcr-creds`
-- Username: your GitHub username, `farah-ben-harb`
-- Password: a GitHub Personal Access Token with package write access
+- Username: `farah-ben-harb`
+- Password: GitHub Personal Access Token with package write access
 
-The pipeline uses that credential to run `docker login ghcr.io` and push the image tags.
+Recommended scopes:
 
-## Jenkins Credential For GitOps Repo Push
+- `write:packages`
+- `read:packages`
 
-Create a second Jenkins credential with:
+### GitOps repository push credential
+
+Create a second Jenkins credential:
 
 - Kind: `Username with password`
 - ID: `gitops-repo-creds`
-- Username: your GitHub username, `farah-ben-harb`
-- Password: a GitHub Personal Access Token with repository write access
+- Username: `farah-ben-harb`
+- Password: GitHub Personal Access Token with repository write access
 
-The simplest safe option is a token with:
+Recommended scope:
 
 - `repo`
 
-Jenkins uses that credential only to commit and push the image tag change into:
+## Jenkins VM Requirements
 
-- `gitops-delivery-platform`
+Required tools on the Jenkins VM:
 
-## Jenkins VM Prerequisites
+- Java 17
+- Jenkins
+- Docker
+- Git
+- Python 3
+- `kubectl`
+- `trivy`
 
-Before running the pipeline on the Ubuntu VM, make sure these are installed in addition to Jenkins and Docker:
+Python tooling install example:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y python3 python3-venv python3-pip
 ```
 
-The Jenkins service user must also be able to access Docker:
+Allow the Jenkins user to access Docker:
 
 ```bash
 sudo usermod -aG docker jenkins
 sudo systemctl restart jenkins
 ```
 
-## Repository Structure
+## Related Repository
 
-```text
-app/
-  api/
-  core/
-  db/
-  models/
-  schemas/
-  services/
-  telemetry/
-tests/
-Dockerfile
-docker-compose.yml
-requirements.txt
-```
+The GitOps and Kubernetes deployment manifests for this application live in:
 
-## Upcoming Phases
+- `gitops-delivery-platform`
 
-- Jenkins pipeline with tests and Docker build
-- Gitleaks, dependency, and Trivy scans
-- GHCR image publishing
-- GitOps manifest updates in a separate repo
-- Argo CD deployment to `kind`
-- Prometheus and Grafana dashboards
+That repository contains:
+
+- Kubernetes manifests
+- Kustomize overlay for `kind`
+- Argo CD application definition
+- Prometheus `ServiceMonitor`
+- Grafana dashboard provisioning

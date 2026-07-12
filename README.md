@@ -20,8 +20,8 @@ The deployment layer lives in the companion repository:
 The end-to-end workflow for the full platform is:
 
 1. Developers push changes to this repository
-2. Jenkins runs tests and security scans
-3. Jenkins builds the Docker image
+2. Jenkins runs CI checks including tests, secret scanning, dependency scanning, filesystem scanning, and optional SonarQube analysis
+3. Jenkins builds the Docker image and scans it
 4. Jenkins pushes the image to GitHub Container Registry
 5. Jenkins updates the GitOps repository with the immutable image tag
 6. Argo CD detects the GitOps change and deploys to Kubernetes
@@ -50,7 +50,8 @@ The end-to-end workflow for the full platform is:
 - `Docker`
 - `Jenkins`
 - `Gitleaks`
-- `pip-audit`
+- `OWASP Dependency-Check`
+- `SonarQube` (optional stage)
 - `Trivy`
 - `GitHub Container Registry (GHCR)`
 
@@ -212,12 +213,22 @@ Pipeline stages:
 - `Checkout`
 - `Verify Toolchain`
 - `Install Dependencies`
+- `CI`
+- `CD`
+
+Inside `CI`, the pipeline runs:
+
 - `Run Tests`
 - `Gitleaks Scan`
-- `Dependency Vulnerability Scan`
+- `OWASP Dependency-Check`
+- `Trivy Filesystem Scan`
+- `SonarQube Analysis` (optional)
 - `Prepare Image Tags`
 - `Build Docker Image`
 - `Trivy Image Scan`
+
+Inside `CD`, the pipeline runs:
+
 - `Push Image To GHCR`
 - `Update GitOps Repo`
 
@@ -226,13 +237,17 @@ Pipeline stages:
 The CI pipeline includes:
 
 - `Gitleaks` for secret scanning
-- `pip-audit` for Python dependency vulnerability scanning
+- `OWASP Dependency-Check` for software composition and dependency vulnerability scanning
+- `Trivy fs` for repository filesystem scanning
 - `Trivy` for container image vulnerability scanning
+- optional `SonarQube` analysis for code quality, maintainability, and coverage reporting
 - immutable image tagging for traceability and rollback safety
 
 Reports are archived by Jenkins under:
 
 - `reports/`
+
+Dependency-Check is executed through the official Docker image and currently scans the Python project using the tool's pip analyzer. Because the pip analyzer is marked experimental by OWASP, the pipeline enables experimental analyzers explicitly.
 
 ## Container Image Publishing
 
@@ -283,6 +298,39 @@ Recommended scope:
 
 - `repo`
 
+### SonarQube token credential
+
+If you want to enable the SonarQube stage, create an additional Jenkins credential:
+
+- Kind: `Secret text`
+- ID: `sonar-token`
+- Value: SonarQube user token
+
+Also define the Jenkins environment variable:
+
+- `SONAR_HOST_URL`
+
+Then set the pipeline parameter:
+
+- `ENABLE_SONARQUBE=true`
+
+The repository already includes:
+
+- `sonar-project.properties`
+
+so the scanner can pick up sources, tests, coverage, and JUnit reports automatically.
+
+### Optional email notifications
+
+The pipeline supports optional email notifications through the `NOTIFY_EMAIL` parameter.
+
+If Jenkins Mailer is configured, the pipeline sends a completion summary containing:
+
+- build result
+- build URL
+- commit reference
+- CI/CD summary
+
 ## Jenkins VM Requirements
 
 Required tools on the Jenkins VM:
@@ -293,6 +341,7 @@ Required tools on the Jenkins VM:
 - Git
 - Python 3
 - `kubectl`
+- `sonar-scanner` is not required locally because the pipeline uses the official scanner container image
 - `trivy`
 
 Python tooling install example:

@@ -33,6 +33,7 @@ pipeline {
         GITOPS_REPO_DIR = "gitops-repo"
         REPORTS_DIR = "reports"
         ODC_IMAGE = "owasp/dependency-check:12.2.2"
+        ODC_DATA_VOLUME = "devsecops-incident-platform-odc-data"
         SONAR_SCANNER_IMAGE = "sonarsource/sonar-scanner-cli:11"
         VENV_DIR = ".venv"
     }
@@ -111,17 +112,19 @@ pipeline {
                         ]) {
                             sh '''
                                 set -eu
-                                mkdir -p "${REPORTS_DIR}" .dependency-check-data
+                                mkdir -p "${REPORTS_DIR}"
                                 run_dependency_check() {
+                                  docker volume create "${ODC_DATA_VOLUME}" >/dev/null
                                   docker run --rm \
+                                    -e user="$(id -un)" \
+                                    -u "$(id -u):$(id -g)" \
                                     -v "$PWD:/src" \
                                     -v "$PWD/${REPORTS_DIR}:/report" \
-                                    -v "$PWD/.dependency-check-data:/odc-data" \
+                                    -v "${ODC_DATA_VOLUME}:/usr/share/dependency-check/data" \
                                     "${ODC_IMAGE}" \
                                     --scan /src \
                                     --project "devsecops-incident-platform" \
                                     --out /report \
-                                    --data /odc-data \
                                     --format JSON \
                                     --format HTML \
                                     --failOnCVSS 7 \
@@ -130,11 +133,8 @@ pipeline {
                                 }
 
                                 reset_dependency_check_cache() {
-                                  docker ps -aq --filter "ancestor=${ODC_IMAGE}" | xargs -r docker rm -f || true
-                                  docker run --rm \
-                                    -v "$PWD/.dependency-check-data:/odc-data" \
-                                    alpine:3.20 \
-                                    sh -c 'rm -rf /odc-data/* /odc-data/.[!.]* /odc-data/..?* 2>/dev/null || true'
+                                  docker volume rm -f "${ODC_DATA_VOLUME}" >/dev/null 2>&1 || true
+                                  docker volume create "${ODC_DATA_VOLUME}" >/dev/null
                                 }
 
                                 if ! run_dependency_check; then

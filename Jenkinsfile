@@ -17,6 +17,11 @@ pipeline {
             defaultValue: false,
             description: 'Run SonarQube analysis when SONAR_HOST_URL and sonar-token are configured.'
         )
+        booleanParam(
+            name: 'ENABLE_OWASP',
+            defaultValue: false,
+            description: 'Run OWASP Dependency-Check as an advisory stage. Disabled by default because NVD API availability is unstable in this environment.'
+        )
         string(
             name: 'NOTIFY_EMAIL',
             defaultValue: '',
@@ -68,6 +73,7 @@ pipeline {
                     pip install --upgrade pip
                     pip install -r requirements.txt
                     pip install pytest-cov
+                    pip install pip-audit
                 '''
             }
         }
@@ -106,7 +112,26 @@ pipeline {
                     }
                 }
 
+                stage('Python Dependency Audit') {
+                    steps {
+                        sh '''
+                            set -eu
+                            mkdir -p "${REPORTS_DIR}"
+                            . "${VENV_DIR}/bin/activate"
+                            pip-audit \
+                              -r requirements.txt \
+                              --format json \
+                              --output "${REPORTS_DIR}/pip-audit.json"
+                        '''
+                    }
+                }
+
                 stage('OWASP Dependency-Check') {
+                    when {
+                        expression {
+                            return params.ENABLE_OWASP
+                        }
+                    }
                     steps {
                         catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
                             withCredentials([
@@ -349,7 +374,7 @@ Build URL: ${env.BUILD_URL}
 Git commit: ${env.GIT_COMMIT ?: 'n/a'}
 
 Pipeline summary:
-- CI: tests, Gitleaks, OWASP Dependency-Check, Trivy filesystem scan, SonarQube (optional), Docker build, Trivy image scan
+- CI: tests, Gitleaks, pip-audit, OWASP Dependency-Check (optional/advisory), Trivy filesystem scan, SonarQube (optional), Docker build, Trivy image scan
 - CD: GHCR push and GitOps repository update (when RUN_CD=true)
 """.stripIndent()
 
@@ -363,6 +388,7 @@ Pipeline summary:
         }
         success {
             echo "Build completed with CI, security scans, optional SonarQube analysis, GHCR push, and GitOps repo update."
+            echo "Blocking dependency scanning is enforced with pip-audit; OWASP Dependency-Check is optional for advisory reporting."
             echo "Published tags: ${APP_IMAGE}:${BUILD_IMAGE_TAG}, ${APP_IMAGE}:${SHA_IMAGE_TAG}, ${APP_IMAGE}:${LATEST_IMAGE_TAG}"
         }
     }

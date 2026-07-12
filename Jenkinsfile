@@ -129,14 +129,17 @@ pipeline {
                                     --nvdApiKey "${NVD_API_KEY}"
                                 }
 
-                                if ! run_dependency_check; then
-                                  echo "Dependency-Check cache may be locked or corrupted. Purging the local cache and retrying once."
+                                reset_dependency_check_cache() {
+                                  docker ps -aq --filter "ancestor=${ODC_IMAGE}" | xargs -r docker rm -f || true
                                   docker run --rm \
                                     -v "$PWD/.dependency-check-data:/odc-data" \
-                                    "${ODC_IMAGE}" \
-                                    --purge \
-                                    --data /odc-data
+                                    alpine:3.20 \
+                                    sh -c 'rm -rf /odc-data/* /odc-data/.[!.]* /odc-data/..?* 2>/dev/null || true'
+                                }
 
+                                if ! run_dependency_check; then
+                                  echo "Dependency-Check cache may be locked or corrupted. Resetting the local cache and retrying once."
+                                  reset_dependency_check_cache
                                   rm -f "${REPORTS_DIR}/dependency-check-report.json" "${REPORTS_DIR}/dependency-check-report.html"
                                   run_dependency_check
                                 fi

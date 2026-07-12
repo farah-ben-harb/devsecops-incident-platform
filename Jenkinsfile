@@ -3,6 +3,7 @@ pipeline {
 
     options {
         timestamps()
+        disableConcurrentBuilds()
     }
 
     parameters {
@@ -111,20 +112,34 @@ pipeline {
                             sh '''
                                 set -eu
                                 mkdir -p "${REPORTS_DIR}" .dependency-check-data
-                                docker run --rm \
-                                  -v "$PWD:/src" \
-                                  -v "$PWD/${REPORTS_DIR}:/report" \
-                                  -v "$PWD/.dependency-check-data:/odc-data" \
-                                  "${ODC_IMAGE}" \
-                                  --scan /src \
-                                  --project "devsecops-incident-platform" \
-                                  --out /report \
-                                  --data /odc-data \
-                                  --format JSON \
-                                  --format HTML \
-                                  --failOnCVSS 7 \
-                                  --enableExperimental \
-                                  --nvdApiKey "${NVD_API_KEY}"
+                                run_dependency_check() {
+                                  docker run --rm \
+                                    -v "$PWD:/src" \
+                                    -v "$PWD/${REPORTS_DIR}:/report" \
+                                    -v "$PWD/.dependency-check-data:/odc-data" \
+                                    "${ODC_IMAGE}" \
+                                    --scan /src \
+                                    --project "devsecops-incident-platform" \
+                                    --out /report \
+                                    --data /odc-data \
+                                    --format JSON \
+                                    --format HTML \
+                                    --failOnCVSS 7 \
+                                    --enableExperimental \
+                                    --nvdApiKey "${NVD_API_KEY}"
+                                }
+
+                                if ! run_dependency_check; then
+                                  echo "Dependency-Check cache may be locked or corrupted. Purging the local cache and retrying once."
+                                  docker run --rm \
+                                    -v "$PWD/.dependency-check-data:/odc-data" \
+                                    "${ODC_IMAGE}" \
+                                    --purge \
+                                    --data /odc-data
+
+                                  rm -f "${REPORTS_DIR}/dependency-check-report.json" "${REPORTS_DIR}/dependency-check-report.html"
+                                  run_dependency_check
+                                fi
                             '''
                         }
                     }

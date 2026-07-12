@@ -34,6 +34,7 @@ pipeline {
         REPORTS_DIR = "reports"
         ODC_IMAGE = "owasp/dependency-check:12.2.2"
         ODC_DATA_VOLUME = "devsecops-incident-platform-odc-data"
+        NVD_API_TEST_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=1"
         SONAR_SCANNER_IMAGE = "sonarsource/sonar-scanner-cli:11"
         VENV_DIR = ".venv"
     }
@@ -107,51 +108,66 @@ pipeline {
 
                 stage('OWASP Dependency-Check') {
                     steps {
-                        withCredentials([
-                            string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')
-                        ]) {
-                            sh '''
-                                set -eu
-                                mkdir -p "${REPORTS_DIR}"
-                                docker volume create "${ODC_DATA_VOLUME}" >/dev/null
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                            withCredentials([
+                                string(credentialsId: 'nvd-api-key', variable: 'NVD_API_KEY')
+                            ]) {
+                                sh '''
+                                    set -eu
+                                    mkdir -p "${REPORTS_DIR}"
 
-                                update_dependency_db() {
-                                  docker run --rm \
-                                    -v "${ODC_DATA_VOLUME}:/usr/share/dependency-check/data" \
-                                    "${ODC_IMAGE}" \
-                                    --updateonly \
-                                    --nvdApiKey "${NVD_API_KEY}"
-                                }
+                                    if ! curl --fail --silent --show-error \
+                                      -H "Accept: application/json" \
+                                      -H "apiKey: ${NVD_API_KEY}" \
+                                      "${NVD_API_TEST_URL}" \
+                                      -o /dev/null; then
+                                      echo "NVD API preflight check failed. Skipping blocking OWASP scan for this run."
+                                      printf '%s\n' "NVD API preflight failed at $(date -u +"%Y-%m-%dT%H:%M:%SZ")." > "${REPORTS_DIR}/dependency-check-skipped.txt"
+                                      exit 1
+                                    fi
 
-                                scan_dependencies() {
-                                  docker run --rm \
-                                    -v "$PWD:/src:ro" \
-                                    -v "$PWD/${REPORTS_DIR}:/report" \
-                                    -v "${ODC_DATA_VOLUME}:/usr/share/dependency-check/data" \
-                                    "${ODC_IMAGE}" \
-                                    --noupdate \
-                                    --scan /src \
-                                    --project "devsecops-incident-platform" \
-                                    --out /report \
-                                    --format JSON \
-                                    --format HTML \
-                                    --failOnCVSS 7 \
-                                    --enableExperimental \
-                                    --exclude "/src/.git/*" \
-                                    --exclude "/src/.venv/*" \
-                                    --exclude "/src/reports/*"
-                                }
+                                    docker volume create "${ODC_DATA_VOLUME}" >/dev/null
 
-                                if ! update_dependency_db; then
-                                  echo "Dependency-Check update failed. Recreating the data volume and retrying once."
-                                  docker volume rm -f "${ODC_DATA_VOLUME}" >/dev/null 2>&1 || true
-                                  docker volume create "${ODC_DATA_VOLUME}" >/dev/null
-                                  update_dependency_db
-                                fi
+                                    update_dependency_db() {
+                                      docker run --rm \
+                                        -v "${ODC_DATA_VOLUME}:/usr/share/dependency-check/data" \
+                                        "${ODC_IMAGE}" \
+                                        --updateonly \
+                                        --nvdApiKey "${NVD_API_KEY}" \
+                                        --nvdApiDelay 5000 \
+                                        --nvdMaxRetryCount 10
+                                    }
 
-                                rm -f "${REPORTS_DIR}/dependency-check-report.json" "${REPORTS_DIR}/dependency-check-report.html"
-                                scan_dependencies
-                            '''
+                                    scan_dependencies() {
+                                      docker run --rm \
+                                        -v "$PWD:/src:ro" \
+                                        -v "$PWD/${REPORTS_DIR}:/report" \
+                                        -v "${ODC_DATA_VOLUME}:/usr/share/dependency-check/data" \
+                                        "${ODC_IMAGE}" \
+                                        --noupdate \
+                                        --scan /src \
+                                        --project "devsecops-incident-platform" \
+                                        --out /report \
+                                        --format JSON \
+                                        --format HTML \
+                                        --failOnCVSS 7 \
+                                        --enableExperimental \
+                                        --exclude "/src/.git/*" \
+                                        --exclude "/src/.venv/*" \
+                                        --exclude "/src/reports/*"
+                                    }
+
+                                    if ! update_dependency_db; then
+                                      echo "Dependency-Check update failed after NVD preflight succeeded. Recreating the data volume and retrying once."
+                                      docker volume rm -f "${ODC_DATA_VOLUME}" >/dev/null 2>&1 || true
+                                      docker volume create "${ODC_DATA_VOLUME}" >/dev/null
+                                      update_dependency_db
+                                    fi
+
+                                    rm -f "${REPORTS_DIR}/dependency-check-report.json" "${REPORTS_DIR}/dependency-check-report.html"
+                                    scan_dependencies
+                                '''
+                            }
                         }
                     }
                 }

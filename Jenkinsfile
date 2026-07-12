@@ -33,6 +33,7 @@ pipeline {
         GITOPS_REPO_DIR = "gitops-repo"
         REPORTS_DIR = "reports"
         ODC_IMAGE = "owasp/dependency-check:12.2.2"
+        ODC_DATA_VOLUME = "devsecops-incident-platform-odc-data"
         SONAR_SCANNER_IMAGE = "sonarsource/sonar-scanner-cli:11"
         VENV_DIR = ".venv"
     }
@@ -112,20 +113,44 @@ pipeline {
                             sh '''
                                 set -eu
                                 mkdir -p "${REPORTS_DIR}"
-                                docker run --rm \
-                                  -e user="$(id -un)" \
-                                  -u "$(id -u):$(id -g)" \
-                                  -v "$PWD:/src" \
-                                  -v "$PWD/${REPORTS_DIR}:/report" \
-                                  "${ODC_IMAGE}" \
-                                  --scan /src \
-                                  --project "devsecops-incident-platform" \
-                                  --out /report \
-                                  --format JSON \
-                                  --format HTML \
-                                  --failOnCVSS 7 \
-                                  --enableExperimental \
-                                  --nvdApiKey "${NVD_API_KEY}"
+                                docker volume create "${ODC_DATA_VOLUME}" >/dev/null
+
+                                update_dependency_db() {
+                                  docker run --rm \
+                                    -v "${ODC_DATA_VOLUME}:/usr/share/dependency-check/data" \
+                                    "${ODC_IMAGE}" \
+                                    --updateonly \
+                                    --nvdApiKey "${NVD_API_KEY}"
+                                }
+
+                                scan_dependencies() {
+                                  docker run --rm \
+                                    -v "$PWD:/src:ro" \
+                                    -v "$PWD/${REPORTS_DIR}:/report" \
+                                    -v "${ODC_DATA_VOLUME}:/usr/share/dependency-check/data" \
+                                    "${ODC_IMAGE}" \
+                                    --noupdate \
+                                    --scan /src \
+                                    --project "devsecops-incident-platform" \
+                                    --out /report \
+                                    --format JSON \
+                                    --format HTML \
+                                    --failOnCVSS 7 \
+                                    --enableExperimental \
+                                    --exclude "/src/.git/*" \
+                                    --exclude "/src/.venv/*" \
+                                    --exclude "/src/reports/*"
+                                }
+
+                                if ! update_dependency_db; then
+                                  echo "Dependency-Check update failed. Recreating the data volume and retrying once."
+                                  docker volume rm -f "${ODC_DATA_VOLUME}" >/dev/null 2>&1 || true
+                                  docker volume create "${ODC_DATA_VOLUME}" >/dev/null
+                                  update_dependency_db
+                                fi
+
+                                rm -f "${REPORTS_DIR}/dependency-check-report.json" "${REPORTS_DIR}/dependency-check-report.html"
+                                scan_dependencies
                             '''
                         }
                     }

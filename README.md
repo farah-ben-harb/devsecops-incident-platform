@@ -247,7 +247,13 @@ Reports are archived by Jenkins under:
 
 - `reports/`
 
-Dependency-Check is executed through the official Docker image and currently scans the Python project using the tool's pip analyzer. Because the pip analyzer is marked experimental by OWASP, the pipeline enables experimental analyzers explicitly.
+Dependency-Check is executed through the official Docker image and scans the Python project using the tool's pip analyzer. Because the pip analyzer is marked experimental by OWASP, the pipeline enables experimental analyzers explicitly.
+
+For stable NVD updates, the Jenkins pipeline expects:
+
+- a Jenkins `Secret text` credential with ID `nvd-api-key`
+
+The stage also persists Dependency-Check data in the Jenkins workspace so subsequent builds do not need to rebuild the vulnerability database from scratch every time.
 
 ## Container Image Publishing
 
@@ -319,6 +325,18 @@ The repository already includes:
 - `sonar-project.properties`
 
 so the scanner can pick up sources, tests, coverage, and JUnit reports automatically.
+
+### NVD API key credential for OWASP Dependency-Check
+
+Create an additional Jenkins credential:
+
+- Kind: `Secret text`
+- ID: `nvd-api-key`
+- Value: NVD API key
+
+You can request an official NVD API key here:
+
+- `https://nvd.nist.gov/developers/request-an-api-key`
 
 ### Optional email notifications
 

@@ -389,3 +389,17 @@ That repository contains:
 - Argo CD application definition
 - Prometheus `ServiceMonitor`
 - Grafana dashboard provisioning
+
+## Branching and Commits
+
+- Use branches such as `feat/<area>`, `fix/<area>`, `docs/<area>`, or `ci/<area>`
+- Keep each commit tied to one logical change
+- Prefer Conventional Commits such as `feat(api): add incident status filters`
+- Avoid placeholder commit messages like `working` or `final`
+
+## Contributing
+
+- Open pull requests for reviewable changes
+- Include test evidence and security impact when relevant
+- Keep credentials out of source control
+- Update the GitOps repository separately when deployment state changes

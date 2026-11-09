@@ -1,6 +1,6 @@
 # DevSecOps Incident Platform
 
-Production-style incident tracking API built with `FastAPI` and `PostgreSQL`, designed as the application repository of a broader DevSecOps and GitOps portfolio platform.
+Production-style incident tracking API built with `FastAPI` and `PostgreSQL`, designed as the application repository of a broader DevSecOps and GitOps platform.
 
 This repository focuses on the application layer:
 
@@ -63,6 +63,7 @@ Base URL:
 
 Available endpoints:
 
+- `GET /`
 - `GET /health`
 - `GET /ready`
 - `GET /metrics`
@@ -71,6 +72,10 @@ Available endpoints:
 - `GET /api/incidents/{incident_id}`
 - `PUT /api/incidents/{incident_id}`
 - `DELETE /api/incidents/{incident_id}`
+
+Browser dashboard:
+
+- `http://localhost:8000/`
 
 Swagger UI:
 
@@ -118,6 +123,12 @@ Copy the example file and adjust values if needed:
 cp .env.example .env
 ```
 
+PowerShell equivalent:
+
+```powershell
+Copy-Item .env.example .env
+```
+
 Key variables:
 
 - `POSTGRES_DB`
@@ -136,6 +147,15 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
+PowerShell equivalent:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
 ### 3. Run PostgreSQL locally
 
 You can either use your own PostgreSQL instance or start the local container stack:
@@ -150,6 +170,20 @@ docker compose up -d postgres
 uvicorn app.main:app --reload
 ```
 
+PowerShell example:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+### 5. Open the app in your browser
+
+Once Uvicorn is running, open:
+
+- `http://localhost:8000/` for the built-in incident dashboard UI
+- `http://localhost:8000/docs` for Swagger UI and raw endpoint testing
+- `http://localhost:8000/api/incidents` for the JSON API response
+
 ## Local Docker Workflow
 
 Run the full application stack with Docker Compose:
@@ -159,10 +193,21 @@ cp .env.example .env
 docker compose up --build
 ```
 
+PowerShell equivalent:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --build
+```
+
 Services:
 
 - API on `8000`
 - PostgreSQL on `5432`
+
+Then open:
+
+- `http://localhost:8000/`
 
 ## Validation Commands
 

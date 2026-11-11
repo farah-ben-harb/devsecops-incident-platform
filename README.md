@@ -232,6 +232,10 @@ Inside `CD`, the pipeline runs:
 - `Push Image To GHCR`
 - `Update GitOps Repo`
 
+CD is disabled by default and must be enabled explicitly through the `RUN_CD`
+parameter. It also requires the Jenkins build to remain `SUCCESS`; an unstable
+security stage cannot publish an image or update GitOps.
+
 ## Security Gates
 
 The CI pipeline includes:
@@ -265,13 +269,11 @@ Each successful pipeline publishes:
 
 - `build-<jenkins-build-number>`
 - `sha-<short-git-sha>`
-- `latest`
 
 Example:
 
 - `ghcr.io/farah-ben-harb/devsecops-incident-platform-api:build-12`
 - `ghcr.io/farah-ben-harb/devsecops-incident-platform-api:sha-a1b2c3d`
-- `ghcr.io/farah-ben-harb/devsecops-incident-platform-api:latest`
 
 The GitOps workflow uses the immutable `sha-<short-git-sha>` tag.
 

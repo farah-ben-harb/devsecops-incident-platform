@@ -9,8 +9,8 @@ pipeline {
     parameters {
         booleanParam(
             name: 'RUN_CD',
-            defaultValue: true,
-            description: 'Push the container image to GHCR and update the GitOps repository after CI succeeds.'
+            defaultValue: false,
+            description: 'Explicitly publish the image and update GitOps after every blocking CI gate is green.'
         )
         booleanParam(
             name: 'ENABLE_SONARQUBE',
@@ -101,7 +101,7 @@ pipeline {
                             mkdir -p "${REPORTS_DIR}"
                             docker run --rm \
                               -v "$PWD:/workspace" \
-                              zricethezav/gitleaks:latest \
+                              zricethezav/gitleaks:v8.30.0 \
                               detect \
                               --source /workspace \
                               --redact \
@@ -240,9 +240,8 @@ pipeline {
                         script {
                             env.GIT_SHA_SHORT = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim()
                             env.SHA_IMAGE_TAG = "sha-${env.GIT_SHA_SHORT}"
-                            env.LATEST_IMAGE_TAG = "latest"
                         }
-                        echo "Image tags prepared: ${BUILD_IMAGE_TAG}, ${SHA_IMAGE_TAG}, ${LATEST_IMAGE_TAG}"
+                        echo "Image tags prepared: ${BUILD_IMAGE_TAG}, ${SHA_IMAGE_TAG}"
                     }
                 }
 
@@ -253,7 +252,6 @@ pipeline {
                             docker build \
                               -t "${APP_IMAGE}:${BUILD_IMAGE_TAG}" \
                               -t "${APP_IMAGE}:${SHA_IMAGE_TAG}" \
-                              -t "${APP_IMAGE}:${LATEST_IMAGE_TAG}" \
                               .
                         '''
                     }
@@ -279,7 +277,7 @@ pipeline {
         stage('CD') {
             when {
                 expression {
-                    return params.RUN_CD
+                    return params.RUN_CD && currentBuild.currentResult == 'SUCCESS'
                 }
             }
             stages {
@@ -297,10 +295,8 @@ pipeline {
                                 printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
                                 docker push "${APP_IMAGE}:${BUILD_IMAGE_TAG}"
                                 docker push "${APP_IMAGE}:${SHA_IMAGE_TAG}"
-                                docker push "${APP_IMAGE}:${LATEST_IMAGE_TAG}"
                                 docker manifest inspect "${APP_IMAGE}:${BUILD_IMAGE_TAG}" > /dev/null
                                 docker manifest inspect "${APP_IMAGE}:${SHA_IMAGE_TAG}" > /dev/null
-                                docker manifest inspect "${APP_IMAGE}:${LATEST_IMAGE_TAG}" > /dev/null
                                 docker logout ghcr.io
                             '''
                         }
@@ -375,7 +371,7 @@ Git commit: ${env.GIT_COMMIT ?: 'n/a'}
 
 Pipeline summary:
 - CI: tests, Gitleaks, pip-audit, OWASP Dependency-Check (optional/advisory), Trivy filesystem scan, SonarQube (optional), Docker build, Trivy image scan
-- CD: GHCR push and GitOps repository update (when RUN_CD=true)
+- CD: GHCR push and GitOps repository update (when RUN_CD=true and all blocking gates are green)
 """.stripIndent()
 
                     try {
@@ -387,9 +383,9 @@ Pipeline summary:
             }
         }
         success {
-            echo "Build completed with CI, security scans, optional SonarQube analysis, GHCR push, and GitOps repo update."
+            echo "Build completed with CI and security scans. CD runs only when explicitly enabled and all blocking gates are green."
             echo "Blocking dependency scanning is enforced with pip-audit; OWASP Dependency-Check is optional for advisory reporting."
-            echo "Published tags: ${APP_IMAGE}:${BUILD_IMAGE_TAG}, ${APP_IMAGE}:${SHA_IMAGE_TAG}, ${APP_IMAGE}:${LATEST_IMAGE_TAG}"
+            echo "Traceable image tags: ${APP_IMAGE}:${BUILD_IMAGE_TAG}, ${APP_IMAGE}:${SHA_IMAGE_TAG}"
         }
     }
 }

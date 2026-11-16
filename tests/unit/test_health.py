@@ -12,6 +12,8 @@ def test_root_dashboard_page(client):
     assert "text/html" in response.headers["content-type"]
     assert "DevSecOps Incident Platform" in response.text
     assert "Create a new incident" in response.text
+    assert "localStorage" not in response.text
+    assert "held in memory" in response.text
 
 
 def test_ready_endpoint(client):

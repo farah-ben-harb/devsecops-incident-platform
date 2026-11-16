@@ -335,6 +335,20 @@ UI_HTML = """
       font-size: 0.88rem;
     }
 
+    .api-auth {
+      margin: 16px 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .api-auth-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
     .dashboard {
       display: grid;
       grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.88fr);
@@ -858,6 +872,15 @@ UI_HTML = """
         </div>
         <aside class="status-panel" aria-label="Service status">
           <h2>Runtime status</h2>
+          <form id="auth-form" class="api-auth">
+            <label for="api-token">Incident API access token</label>
+            <input id="api-token" name="incident-api-token" type="password" autocomplete="off" required />
+            <div class="api-auth-actions">
+              <button class="primary" type="submit">Connect</button>
+              <button id="disconnect-button" class="secondary" type="button">Disconnect</button>
+            </div>
+            <p id="auth-message" class="status-note">The token is held in memory only and cleared when this page is closed.</p>
+          </form>
           <div class="status-list">
             <div class="status-item">
               <div>
@@ -1141,6 +1164,10 @@ UI_HTML = """
     const incidentList = document.getElementById("incident-list");
     const form = document.getElementById("incident-form");
     const formMessage = document.getElementById("form-message");
+    const authForm = document.getElementById("auth-form");
+    const apiTokenInput = document.getElementById("api-token");
+    const authMessage = document.getElementById("auth-message");
+    const disconnectButton = document.getElementById("disconnect-button");
     const refreshButton = document.getElementById("refresh-button");
     const severityBreakdown = document.getElementById("severity-breakdown");
     const serviceBreakdown = document.getElementById("service-breakdown");
@@ -1150,6 +1177,11 @@ UI_HTML = """
     const severityFilter = document.getElementById("severity-filter");
     const statusFilter = document.getElementById("status-filter");
     let allIncidents = [];
+    let apiToken = "";
+
+    function apiHeaders(headers = {}) {
+      return apiToken ? { ...headers, Authorization: `Bearer ${apiToken}` } : headers;
+    }
 
     function setPill(id, ok, label) {
       const pill = document.getElementById(id);
@@ -1375,7 +1407,10 @@ UI_HTML = """
           button.disabled = true;
           button.textContent = "Deleting...";
 
-          const response = await fetch(`/api/incidents/${incidentId}`, { method: "DELETE" });
+          const response = await fetch(`/api/incidents/${incidentId}`, {
+            method: "DELETE",
+            headers: apiHeaders(),
+          });
           if (!response.ok) {
             button.disabled = false;
             button.textContent = "Delete";
@@ -1420,14 +1455,27 @@ UI_HTML = """
     }
 
     async function loadIncidents() {
+      if (!apiToken) {
+        allIncidents = [];
+        renderDashboard();
+        incidentList.innerHTML = '<div class="empty-state">Connect with an API token to view incident data.</div>';
+        return;
+      }
+
       incidentList.innerHTML = '<div class="empty-state">Loading incident feed...</div>';
 
       try {
-        const response = await fetch("/api/incidents");
+        const response = await fetch("/api/incidents", { headers: apiHeaders() });
+        if (response.status === 401) {
+          apiToken = "";
+          authMessage.textContent = "The token was rejected. Enter a valid token to reconnect.";
+          throw new Error("authentication failed");
+        }
         if (!response.ok) {
           throw new Error("incident request failed");
         }
 
+        authMessage.textContent = "Connected. The token remains in memory only.";
         allIncidents = await response.json();
         renderDashboard();
         updateRefreshSignal();
@@ -1448,6 +1496,11 @@ UI_HTML = """
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (!apiToken) {
+        formMessage.textContent = "Connect with an API token before creating incidents.";
+        formMessage.className = "message error";
+        return;
+      }
       formMessage.textContent = "Creating incident...";
       formMessage.className = "message";
 
@@ -1461,7 +1514,7 @@ UI_HTML = """
 
       const response = await fetch("/api/incidents", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(payload),
       });
 
@@ -1485,6 +1538,22 @@ UI_HTML = """
     [searchInput, severityFilter, statusFilter].forEach((control) => {
       control.addEventListener("input", renderDashboard);
       control.addEventListener("change", renderDashboard);
+    });
+
+    authForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      apiToken = apiTokenInput.value.trim();
+      apiTokenInput.value = "";
+      authMessage.textContent = "Checking token...";
+      await loadIncidents();
+    });
+
+    disconnectButton.addEventListener("click", () => {
+      apiToken = "";
+      allIncidents = [];
+      renderDashboard();
+      incidentList.innerHTML = '<div class="empty-state">Connect with an API token to view incident data.</div>';
+      authMessage.textContent = "Disconnected. No token is stored in the browser.";
     });
 
     refreshButton.addEventListener("click", async () => {

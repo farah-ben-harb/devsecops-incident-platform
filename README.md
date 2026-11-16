@@ -81,6 +81,8 @@ Swagger UI:
 
 - `http://localhost:8000/docs`
 
+All `/api/incidents` endpoints require `Authorization: Bearer <INCIDENT_API_TOKEN>`. The dashboard asks for this token and keeps it in page memory only; it is not persisted in browser storage or URLs. `/health`, `/ready`, and `/metrics` remain available for health checks and monitoring.
+
 ## Incident Data Model
 
 Each incident includes:
@@ -137,6 +139,9 @@ Key variables:
 - `POSTGRES_HOST`
 - `POSTGRES_PORT`
 - `DATABASE_URL`
+- `INCIDENT_API_TOKEN`
+
+The value in `.env.example` is a local-only placeholder. Generate a unique token for each environment and inject it through the deployment secret store. Production refuses the local placeholder and requires at least 32 characters. Expose authenticated API traffic only over HTTPS; the shared token does not provide per-user roles or audit identity.
 
 ### 2. Create a virtual environment
 
@@ -219,12 +224,19 @@ curl http://localhost:8000/ready
 curl http://localhost:8000/metrics
 ```
 
-Example incident creation:
+Example incident creation (with `INCIDENT_API_TOKEN` set in the shell):
 
 ```bash
 curl -X POST http://localhost:8000/api/incidents \
+  -H "Authorization: Bearer $INCIDENT_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"title":"Database latency spike","description":"PostgreSQL response time increased","severity":"high","status":"open","service_name":"postgresql"}'
+```
+
+Generate a token locally with:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 ## Test Suite

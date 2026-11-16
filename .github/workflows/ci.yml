@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, "fix/**"]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  test:
+    name: Tests and configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Compile Python sources
+        run: python -m compileall -q app tests
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Validate Compose configuration
+        run: |
+          touch .env
+          docker compose config --quiet
+
+      - name: Validate Jenkins CI contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          jenkinsfile = Path("Jenkinsfile").read_text(encoding="utf-8")
+          required_markers = (
+              "name: 'RUN_CD'",
+              "stage('Gitleaks Scan')",
+              "stage('Python Dependency Audit')",
+              "stage('Trivy Filesystem Scan')",
+              "stage('Build Docker Image')",
+              "stage('Trivy Image Scan')",
+              "params.RUN_CD && currentBuild.currentResult == 'SUCCESS'",
+          )
+          missing = [marker for marker in required_markers if marker not in jenkinsfile]
+          if missing:
+              raise SystemExit(f"Jenkinsfile is missing expected CI markers: {missing}")
+          if "git push origin" not in jenkinsfile:
+              raise SystemExit("Jenkinsfile must keep its GitOps update path explicit")
+          PY
+
+      - name: Build image
+        run: docker build --tag devsecops-incident-platform:ci .
+
+      - name: Verify image runs as non-root
+        shell: bash
+        run: |
+          user="$(docker image inspect devsecops-incident-platform:ci --format '{{.Config.User}}')"
+          test "$user" = "app"
+
+  gitleaks:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  semgrep:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run Semgrep
+        uses: semgrep/semgrep-action@v1

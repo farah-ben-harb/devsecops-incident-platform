@@ -5,8 +5,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 TEST_DB_PATH = Path("test_incident_platform.sqlite3")
+TEST_API_TOKEN = "test-only-token-not-a-real-credential-123456"
 
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB_PATH.as_posix()}"
+os.environ["APP_ENV"] = "test"
+os.environ["INCIDENT_API_TOKEN"] = TEST_API_TOKEN
 
 from app.core.config import get_settings
 from app.db.session import Base, get_engine
@@ -36,4 +39,5 @@ def cleanup_database():
 @pytest.fixture
 def client():
     with TestClient(app) as test_client:
+        test_client.headers["Authorization"] = f"Bearer {TEST_API_TOKEN}"
         yield test_client

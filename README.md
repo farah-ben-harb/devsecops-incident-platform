@@ -1,6 +1,6 @@
 # DevSecOps Incident Platform
 
-Production-style incident tracking API built with `FastAPI` and `PostgreSQL`, designed as the application repository of a broader DevSecOps and GitOps portfolio platform.
+Production-style incident tracking API built with `FastAPI` and `PostgreSQL`, designed as the application repository of a broader DevSecOps and GitOps platform.
 
 This repository focuses on the application layer:
 
@@ -63,6 +63,7 @@ Base URL:
 
 Available endpoints:
 
+- `GET /`
 - `GET /health`
 - `GET /ready`
 - `GET /metrics`
@@ -72,9 +73,15 @@ Available endpoints:
 - `PUT /api/incidents/{incident_id}`
 - `DELETE /api/incidents/{incident_id}`
 
+Browser dashboard:
+
+- `http://localhost:8000/`
+
 Swagger UI:
 
 - `http://localhost:8000/docs`
+
+All `/api/incidents` endpoints require `Authorization: Bearer <INCIDENT_API_TOKEN>`. The dashboard asks for this token and keeps it in page memory only; it is not persisted in browser storage or URLs. `/health`, `/ready`, and `/metrics` remain available for health checks and monitoring.
 
 ## Incident Data Model
 
@@ -118,6 +125,12 @@ Copy the example file and adjust values if needed:
 cp .env.example .env
 ```
 
+PowerShell equivalent:
+
+```powershell
+Copy-Item .env.example .env
+```
+
 Key variables:
 
 - `POSTGRES_DB`
@@ -126,6 +139,9 @@ Key variables:
 - `POSTGRES_HOST`
 - `POSTGRES_PORT`
 - `DATABASE_URL`
+- `INCIDENT_API_TOKEN`
+
+The value in `.env.example` is a local-only placeholder. Generate a unique token for each environment and inject it through the deployment secret store. Production refuses the local placeholder and requires at least 32 characters. Expose authenticated API traffic only over HTTPS; the shared token does not provide per-user roles or audit identity.
 
 ### 2. Create a virtual environment
 
@@ -133,6 +149,15 @@ Key variables:
 python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+PowerShell equivalent:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
@@ -150,6 +175,20 @@ docker compose up -d postgres
 uvicorn app.main:app --reload
 ```
 
+PowerShell example:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+### 5. Open the app in your browser
+
+Once Uvicorn is running, open:
+
+- `http://localhost:8000/` for the built-in incident dashboard UI
+- `http://localhost:8000/docs` for Swagger UI and raw endpoint testing
+- `http://localhost:8000/api/incidents` for the JSON API response
+
 ## Local Docker Workflow
 
 Run the full application stack with Docker Compose:
@@ -159,10 +198,21 @@ cp .env.example .env
 docker compose up --build
 ```
 
+PowerShell equivalent:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --build
+```
+
 Services:
 
 - API on `8000`
 - PostgreSQL on `5432`
+
+Then open:
+
+- `http://localhost:8000/`
 
 ## Validation Commands
 
@@ -174,12 +224,19 @@ curl http://localhost:8000/ready
 curl http://localhost:8000/metrics
 ```
 
-Example incident creation:
+Example incident creation (with `INCIDENT_API_TOKEN` set in the shell):
 
 ```bash
 curl -X POST http://localhost:8000/api/incidents \
+  -H "Authorization: Bearer $INCIDENT_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"title":"Database latency spike","description":"PostgreSQL response time increased","severity":"high","status":"open","service_name":"postgresql"}'
+```
+
+Generate a token locally with:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
 ## Test Suite

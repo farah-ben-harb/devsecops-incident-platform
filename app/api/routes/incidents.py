@@ -1,12 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
+from app.core.security import require_incident_api_token
 from app.db.session import get_db
 from app.schemas.incident import IncidentCreate, IncidentResponse, IncidentUpdate
 from app.services import incident_service
 from app.telemetry.metrics import INCIDENT_CREATED_TOTAL
 
-router = APIRouter(prefix="/api/incidents", tags=["incidents"])
+router = APIRouter(
+    prefix="/api/incidents",
+    tags=["incidents"],
+    dependencies=[Depends(require_incident_api_token)],
+)
 
 
 @router.get("", response_model=list[IncidentResponse])

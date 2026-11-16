@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-incident_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_BIND_HOST:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,6 +29,11 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
 
 volumes:
   postgres_data:
